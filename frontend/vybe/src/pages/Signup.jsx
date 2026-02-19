@@ -3,10 +3,14 @@ import logo from "../assets/logo.png";
 import MainLogo from "../assets/MainLogo.png";
 import {useNavigate} from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa6";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { signupApi } from "../api/authApi";
+import { setAccessToken } from "../api/axiosInstance";
 
 const Signup = () => {
   const navigate=useNavigate();
   const [showPassword,setShowPassword]=useState(false);
+  const queryClient = useQueryClient();
 
   const [formData,setFormData]=useState({
     name: "",
@@ -21,6 +25,7 @@ const Signup = () => {
     email: false,
     password: false,
   });
+  const [formError,setFormError]=useState(null);
 
   const handleChange=(e)=>{
     setFormData({...formData,[e.target.name]: e.target.value})
@@ -36,6 +41,36 @@ const Signup = () => {
     }
   }
 
+  const signupMutation=useMutation({
+    mutationFn: async (userData)=>{
+      const res=await signupApi(userData);
+      return res.data;
+    },
+    onSuccess: (data)=>{
+      const {accessToken,user}=data.data;
+      if(!user){
+        setFormError("Signup failed: user data missing");
+        return;
+      }
+      setAccessToken(accessToken);
+      console.log("Signup Access Token:", accessToken);
+      // Set the current user in React Query cache without immediately refetching
+      queryClient.setQueryData(["currentUser"], user);
+
+      navigate("/");
+    },
+    onError: (error)=>{
+      const message=error.response?.data?.message || error.message;
+      setFormError(message);
+      console.error("Signup Error:", message);
+    }
+  })
+
+  const handleSubmit=(e)=>{
+    e.preventDefault();
+    signupMutation.mutate(formData);
+  }
+
   return (
     <div className='w-full h-screen flex items-center justify-center bg-linear-to-br from-black to-gray-800'>
         <div className="w-[65%] h-[80%] bg-white flex rounded-2xl overflow-hidden shadow-lg">
@@ -45,7 +80,9 @@ const Signup = () => {
             <img src={MainLogo} className="w-20 h-10 font-bold" />
           </div> 
 
-           <form className="w-full flex flex-col gap-5 mt-5">
+           <form className="w-full flex flex-col gap-5 mt-5"
+           onSubmit={handleSubmit}
+           >
              {["name", "userName", "email"].map((field)=>(
               <div key={field} className="w-full relative">
                  <input 
@@ -98,15 +135,16 @@ const Signup = () => {
               type="submit"
               className="w-full bg-blue-500 text-white py-3 px-4 rounded-2xl cursor-pointer hover:bg-blue-600"
             >
-              {/* {loginMutation.isLoading ? "Signing In..." : "Sign In"}
-               */}. 
-              Sign Up
+              {signupMutation.isLoading ? "Signing Up..." : "Sign Up"} 
             </button>
 
            </form>
            <p className="text-center mt-5 text-gray-500">
             Already have an account?{" "}
-            <span className="font-bold text-black cursor-pointer" onClick={() => navigate("/login")}>
+            <span
+            onClick={()=>navigate("/login")}
+            className="font-bold text-black cursor-pointer" 
+            >
               Sign In
             </span>
           </p>

@@ -1,7 +1,10 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { signUpService, loginService } from "../services/auth.service.js";
 import  RefreshToken  from "../models/RefreshToken.model.js";
-import { ApiResponse } from "../utils/apiResponse.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import jwt from "jsonwebtoken";
+import { generateToken } from "../utils/token.js";
+import User from "../models/user.model.js";
 
 export const signup=asyncHandler(async(req,res)=>{
     const {name,userName,email,password}=req.body;
@@ -63,3 +66,33 @@ export const logout=asyncHandler(async(req,res)=>{
         return res.status(200).json(new ApiResponse(200,null,"User logged out successfully"));
     }
 });
+
+export const refreshToken=asyncHandler(async(req,res)=>{
+    const oldRefreshToken=req.cookies.refreshToken;
+    console.log("oldRefreshToken",oldRefreshToken)
+    if(!oldRefreshToken){
+        return res.status(401).json(new ApiResponse(401,null,"No refresh token provided"));
+    }
+    let decoded;
+    try {
+        decoded=jwt.verify(oldRefreshToken,process.env.REFRESH_TOKEN_SECRET);
+    } catch (error) {
+        return res.status(401).json(new ApiResponse(401,null,"Invalid refresh token"));
+    }
+    console.log(decoded);
+    const storedToken=await RefreshToken.findOne({token: oldRefreshToken});
+    if(!storedToken){
+        return res.status(401).json(new ApiResponse(401,null,"Refresh token not found"));
+    }
+    const userId=decoded.userId;
+    const user=await User.findOne({_id: userId});
+    console.log("User found for refresh token:", user);
+    if(!user){
+        return res.status(401).json(new ApiResponse(401,null,"User not found"));
+    }
+    const newAccessToken=generateToken(user._id,"access");
+    console.log("newAccessToken",newAccessToken);  
+    return res.status(200).json(new ApiResponse(200,{accessToken: newAccessToken, 
+        user: {_id: user._id, name: user.name, email: user.email, userName: user.userName, profileImg: user.profileImg, bio: user.bio, profession: user.profession, gender: user.gender,}
+    }, "Access token refreshed successfully"));
+})

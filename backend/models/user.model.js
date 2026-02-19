@@ -56,7 +56,10 @@ const userSchema = new mongoose.Schema({
     isPrivate: {
         type: Boolean,
         default: false
-    }
+    },
+    posts: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post"}],
+    stories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Story"}],
+    loops: [{ type: mongoose.Schema.Types.ObjectId, ref: "Loop"}],
 },{timestamps: true});
 
 userSchema.pre("save", async function () {

@@ -3,13 +3,17 @@ import logo from "../assets/logo.png";
 import MainLogo from "../assets/MainLogo.png";
 import {useNavigate} from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa6";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api, setAccessToken } from '../api/axiosInstance';
 
 const Signup = () => {
   const navigate=useNavigate();
   const [showPassword,setShowPassword]=useState(false);
+  const queryClient = useQueryClient();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [formError,setFormError]=useState(null);
 
   const [activeField,setActiveField]=useState({
     email: false,
@@ -26,6 +30,37 @@ const Signup = () => {
     }
   }
 
+  const loginMutation=useMutation({
+    mutationFn: async(formData)=>{
+      const res=await api.post("/auth/login",formData);
+      console.log("Login Response:", res);
+      return res.data;
+    },
+    onSuccess: (data)=>{
+      const {accessToken,user}=data?.data || {};
+      if(!user){
+        setFormError("Login failed: user data missing");
+        return;
+      }
+      setAccessToken(accessToken);
+      // Set the current user in React Query cache without forcing an immediate refetch
+      queryClient.setQueryData(["currentUser"], user);
+      queryClient.invalidateQueries(["currentUser"]);
+
+      console.log("Navigating to home with user:", user);
+      navigate("/");
+    },
+    onError: (error)=>{
+      const message=error.response?.data?.message || error.message;
+      setFormError(message);
+    }
+  })
+
+  const handleLogin=(e)=>{
+    e.preventDefault();
+    loginMutation.mutate({email,password});
+  }
+
   return (
     <div className='w-full h-screen flex items-center justify-center bg-linear-to-br from-black to-gray-800'>
         <div className="w-[65%] h-[80%] bg-white flex rounded-2xl overflow-hidden shadow-lg">
@@ -35,7 +70,9 @@ const Signup = () => {
             <img src={MainLogo} className="w-20 h-10 font-bold" />
           </div> 
 
-           <form className="w-full flex flex-col gap-5 mt-5">
+           <form className="w-full flex flex-col gap-5 mt-5"
+           onSubmit={handleLogin}
+           >
             <div className="w-full relative">
               <input
                 type="email"
@@ -85,10 +122,9 @@ const Signup = () => {
               type="submit"
               className="w-full bg-blue-500 text-white py-3 px-4 rounded-2xl cursor-pointer hover:bg-blue-600"
             >
-              {/* {loginMutation.isLoading ? "Signing In..." : "Sign In"} */}
-              Sign In
+              {loginMutation.isLoading ? "Signing In..." : "Sign In"}
             </button>
-
+            {formError && <p className="text-red-500 text-sm mt-2">{formError}</p>}
            </form>
            <p className="text-center mt-5 text-gray-500">
             Don't have an account?{" "}

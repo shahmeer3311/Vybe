@@ -4,6 +4,9 @@ import {PublicRoute, PrivateRoute} from './RouteWrapper'
 import Home from "../pages/Home"
 import Login from '../pages/Login'
 import Signup from '../pages/Signup'
+import Upload from '../pages/Upload';
+import Profile from '../pages/Profile';
+import EditProfile from '../pages/EditProfile';
 
 const AppRoutes = (user) => 
     createBrowserRouter([
@@ -12,7 +15,19 @@ const AppRoutes = (user) =>
             children: [
                 {
                     index: true,
-                    element: <Home  />
+                    element: <Home user={user} />
+                },
+                {
+                    path: "/upload",
+                    element: <Upload />
+                },
+                {
+                    path: "/profile/:userId",
+                    element: <Profile />
+                },
+                {
+                    path: "edit-profile",
+                    element: <EditProfile />
                 }
             ]
         },
