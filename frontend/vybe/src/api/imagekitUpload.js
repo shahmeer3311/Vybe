@@ -1,13 +1,5 @@
 import { api } from "./axiosInstance";
 
-/**
- * Upload file(s) to ImageKit.
- * 
- * @param {File | File[]} files - Single file or array of files
- * @param {Object} options
- * @param {boolean} options.showProgress - Whether to track progress (default: true)
- * @returns {Promise<Object[]>} - Returns an array of ImageKit responses
- */
 export const uploadToImageKit = async (files, options = { showProgress: true }) => {
   const { showProgress } = options;
 

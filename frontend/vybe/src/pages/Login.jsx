@@ -44,7 +44,7 @@ const Signup = () => {
       }
       setAccessToken(accessToken);
       // Set the current user in React Query cache without forcing an immediate refetch
-      queryClient.setQueryData(["currentUser"], user);
+      // queryClient.setQueryData(["currentUser"], user);
       queryClient.invalidateQueries(["currentUser"]);
 
       console.log("Navigating to home with user:", user);

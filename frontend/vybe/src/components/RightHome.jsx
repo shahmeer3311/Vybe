@@ -3,8 +3,11 @@ import { useOnlineUsers } from "../hooks/useOnlineUsers";
 import { useQuery } from "@tanstack/react-query";
 import { FiMessageCircle, FiSearch } from "react-icons/fi";
 import { getFollowingListApi } from "../api/userApi";
+import { getUserConversationsApi } from "../api/msgApi";
+import { useNavigate } from "react-router-dom";
 
 const RightHome = ({ user }) => {
+  const navigate=useNavigate();
   const { onlineUserIds, lastSeenMap } = useOnlineUsers();
 
   // Subscribe to the same following list query so this component
@@ -36,6 +39,14 @@ const RightHome = ({ user }) => {
     return `Last seen ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   };
 
+  const {data: messageHistory}=useQuery({
+    queryKey:["messageHistory"],
+    queryFn: async()=> await getUserConversationsApi(),
+    enabled: !!user, // Only run this query if the user is logged in
+  });
+
+  console.log("Message History:", messageHistory);
+
   return (
     <div className="w-[25%] hidden lg:flex flex-col min-h-screen bg-black fixed top-0 right-0 border-l border-gray-800">
       {/* Header */}
@@ -56,18 +67,6 @@ const RightHome = ({ user }) => {
             className="w-10 h-10 rounded-full object-cover border border-gray-700"
           />
         )}
-      </div>
-
-      {/* Search */}
-      <div className="px-5 py-3 border-b border-gray-800 bg-gradient-to-b from-black to-gray-950">
-        <div className="relative">
-          <FiSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search conversations"
-            className="w-full bg-gray-900 text-sm text-gray-200 rounded-full pl-9 pr-3 py-2 outline-none border border-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-gray-500"
-          />
-        </div>
       </div>
 
       {/* Body */}
@@ -126,7 +125,7 @@ const RightHome = ({ user }) => {
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold tracking-wide text-gray-400 uppercase">
-              Recent contacts
+              Recent Online Contacts
             </span>
             <span className="text-xs text-gray-500">
               {offlineUsers.length} offline
@@ -136,7 +135,7 @@ const RightHome = ({ user }) => {
           {offlineUsers.length === 0 ? (
             <p className="text-xs text-gray-500">No recent contacts yet.</p>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 border-b border-gray-800 pt-3">
               {offlineUsers.map((u) => (
                 <div
                   key={u._id}
@@ -165,6 +164,53 @@ const RightHome = ({ user }) => {
               ))}
             </div>
           )}
+        </div>     
+      </div>
+
+       <div className="px-5 py-3  bg-gradient-to-b from-black to-gray-950 absolute top-65 w-full">
+        <div className="relative">
+          <FiSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search conversations"
+            className="w-full bg-gray-900 text-sm text-gray-200 rounded-full pl-9 pr-3 py-2 outline-none border border-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-gray-500"
+          />
+        </div>
+        <div className="mt-5 text-xs text-gray-500">
+           <h1 className="text-white text-2xl italic font-bold">Message History</h1>
+           {messageHistory && messageHistory.length > 0 ? (
+             <ul className="mt-3 space-y-2">
+               {messageHistory.map((conv) => (
+                 <li 
+                 onClick={()=>navigate(`/messageArea/user/${conv.participants[1]._id}`)}
+                 key={conv._id} className="flex items-center gap-3 bg-gray-900/60 rounded-lg px-4 py-4 cursor-pointer hover:bg-gray-900 transition-colors">
+                   <img
+                     src={
+                       conv.participants[1].profileImg ||
+                       "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+                     }
+                     alt={conv.participants[1].userName}
+                     className="w-10 h-10 rounded-full object-cover"
+                   />
+                   <div className="flex items-center justify-between w-full">
+                     <div>
+                      <p className="text-sm font-medium text-white">
+                       {conv.participants[1].name}
+                     </p>
+                     <p className="text-xs text-gray-400 truncate max-w-[150px]">
+                       {conv.lastMessage?.message || "No messages yet"}
+                     </p>
+                     </div>
+                     <p className="text-[10px] text-gray-500">
+                       {conv.createdAt ? new Date(conv.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "No messages yet"}
+                     </p>
+                   </div>   
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray-500 mt-2">No conversations found.</p>
+            )}
         </div>
       </div>
     </div>

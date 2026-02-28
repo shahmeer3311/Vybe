@@ -2,7 +2,7 @@ import React from "react";
 import { useCurrentUser } from "../hooks/useAuth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getFollowingListApi, followOrUnfollowApi } from "../api/userApi";
-import { deletePostApi } from "../api/postApi";
+import { commentPostApi, deletePostApi, likePostApi } from "../api/postApi";
 import {
   FiMoreHorizontal,
   FiTrash2,
@@ -11,13 +11,16 @@ import {
   FiUserCheck,
   FiFlag,
 } from "react-icons/fi";
-import { FaRegHeart, FaHeart, FaRegComment } from "react-icons/fa";
+import {IoBrushSharp, IoSendSharp} from "react-icons/io5";
+import { FaRegHeart, FaHeart, FaRegComment, FaBrush } from "react-icons/fa";
 import { MdSaveAlt } from "react-icons/md";
 import { IoIosSend } from "react-icons/io";
 
 const PostCard = ({ post }) => {
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [showComments, setShowComments] = React.useState(false);
+  const [comment, setComment] = React.useState("");
 
   const { data: currentUser } = useCurrentUser();
   const queryClient = useQueryClient();
@@ -63,6 +66,83 @@ const PostCard = ({ post }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["posts"] });
+    },
+  });
+
+  const hasLiked=post?.likes?.includes(currentUser?._id);
+
+  const likeMutation=useMutation({
+    mutationFn: likePostApi,
+   onMutate: async(postId)=>{
+    await queryClient.cancelQueries(["posts"]);
+    const previousPosts=queryClient.getQueryData(["posts"]);
+
+    queryClient.setQueryData(["posts"],(oldData)=>{
+      if(!oldData || !oldData.data) return oldData;
+
+      return {
+        ...oldData,
+        data:oldData.data.map((p)=>
+          p._id===postId
+        ?
+        {
+          ...p,
+          likes:p.likes.includes(currentUser._id)
+          ? p.likes.filter((id)=>id!==currentUser._id)
+          : [...p.likes,currentUser._id]
+        }
+        :p
+        )
+      }
+    })
+
+    return {previousPosts};
+   },
+   onError:(err,postId,context)=>{
+    if(context?.previousPosts){
+      queryClient.setQueryData(["posts"],context.previousPosts);
+    }
+   },
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: commentPostApi,
+    onMutate: async ({ postId, text }) => {
+      await queryClient.cancelQueries(["posts"]);
+      const previousPosts = queryClient.getQueryData(["posts"]);
+
+      queryClient.setQueryData(["posts"], (oldData) => {
+        if (!oldData || !oldData.data) return oldData;
+
+        return {
+          ...oldData,
+          data: oldData.data.map((p) =>
+            p._id === postId
+              ? {
+                  ...p,
+                  comments: [
+                    ...p.comments,
+                    {
+                      _id: Date.now(),
+                      message: text,
+                      author: currentUser,
+                    },
+                  ],
+                }
+              : p
+          ),
+        };
+      });
+
+      return { previousPosts };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousPosts) {
+        queryClient.setQueryData(["posts"], context.previousPosts);
+      }
+    },
+    onSuccess: () => {
+      setComment("");
     },
   });
 
@@ -231,7 +311,7 @@ const PostCard = ({ post }) => {
                     onClick={() => setCurrentIndex(index)}
                     className={`w-3 h-3 rounded-full transition-all duration-300 ${
                       currentIndex === index
-                        ? "bg-blue-500 scale-110"
+                        ? "bg-blue-500 scale-110 w-5"
                         : "bg-gray-300"
                     }`}
                   />
@@ -247,21 +327,20 @@ const PostCard = ({ post }) => {
             {/* Like */}
             <button
               type="button"
-               className={`flex items-center gap-1 transition-all text-gray-600 hover:text-red-500`}
-            //   onClick={() => likeMutation.mutate(post._id)}
-            //   className={`flex items-center gap-1 transition-all ${
-            //     hasLiked ? "text-red-500" : "text-gray-600 hover:text-red-500"
-            //   }`}
+              onClick={() => likeMutation.mutate(post._id)}
+              className={`flex items-center gap-1 transition-all ${
+                hasLiked ? "text-red-500" : "text-gray-600 hover:text-red-500"
+              }`}
             >
-              {/* {hasLiked ? <FaHeart /> : <FaRegHeart />} */}
-              <FaRegHeart className="w-5 h-5" />
+              {hasLiked ? <FaHeart /> : <FaRegHeart />}
+              {/* <FaRegHeart className="w-5 h-5" /> */}
               {post.likes?.length || 0}
             </button>
 
             {/* Comment */}
             <button
               type="button"
-            //   onClick={() => setShowComments(!showComments)}
+              onClick={() => setShowComments(!showComments)}
               className="flex items-center gap-1 text-gray-600 hover:text-blue-500 transition-all"
             >
               <FaRegComment className="w-5 h-5" /> {post.comments?.length || 0}
@@ -279,6 +358,56 @@ const PostCard = ({ post }) => {
             <MdSaveAlt className="w-6 h-6 text-blue-500" />
           </button>
         </div>
+
+        <div className="w-full px-3 border-t border-gray-200 pt-2">
+          <p className="px-3 text-sm text-gray-800">
+            <IoBrushSharp className="inline-block w-4 h-4 text-gray-500 mr-1" />
+            {post?.caption}
+          </p>
+        </div>
+
+        {showComments && (
+          <div className="p-3 border-t border-gray-200">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Write a comment..."
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  commentMutation.mutate({ postId: post._id, text: comment })
+                }
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2"
+              >
+                Post <IoSendSharp />
+              </button>
+            </div>
+
+            {post.comments?.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {post.comments.map((c) => (
+                  <div key={c._id} className="flex items-center gap-2">
+                    <img
+                      src={c.author?.profileImg}
+                      className="w-8 h-8 rounded-full object-cover"
+                      alt="comment"
+                    />
+                    <div className="bg-gray-100 px-3 py-1 rounded-lg">
+                      <span className="font-semibold text-sm">
+                        {c.author?.name}
+                      </span>
+                      <p className="text-sm">{c.text || c.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
     </div>
   );
 };

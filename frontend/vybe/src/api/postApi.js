@@ -15,3 +15,14 @@ export const deletePostApi = async (postId) => {
   const { data } = await api.delete(`/posts/${postId}`);
   return data;
 };
+
+
+export const likePostApi=async(postId)=>{
+  const {data}=await api.put(`/posts/like/${postId}`);
+  return data;
+}
+
+export const commentPostApi=async({postId,text})=>{
+  const {data}=await api.post(`/posts/comments/${postId}`,{text});
+  return data;
+}

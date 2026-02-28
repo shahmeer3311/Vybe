@@ -3,6 +3,10 @@ import authRouter from "./routes/auth.route.js";
 import postRouter from "./routes/post.route.js";
 import userRouter from "./routes/user.route.js";
 import imagekitRouter from "./routes/imagekit.route.js";
+import storyRouter from "./routes/story.route.js";
+import loopRouter from "./routes/loop.route.js";
+import convoRouter from "./routes/convo.route.js";
+import msgRouter from "./routes/msg.route.js";
 import connectDB from "./config/db.js";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
@@ -25,6 +29,10 @@ app.use("/api/auth", authRouter);
 app.use("/api/posts", postRouter);
 app.use("/api/users", userRouter);
 app.use("/api/imagekit", imagekitRouter);
+app.use("/api/stories", storyRouter);
+app.use("/api/loop", loopRouter);
+app.use("/api/conversations", convoRouter);
+app.use("/api/messages", msgRouter);
 
 app.use(errorHandler);
 

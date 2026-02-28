@@ -48,5 +48,35 @@ export const getAllPostsService=async()=>{
     const posts=await Post.find({})
     .populate("author","name userName profileImg email")
     .populate("comments.author","name userName profileImg")
+    .sort({ createdAt: -1 });
     return posts;
+}
+
+export const likeUnlikePostService=async(postId,userId)=>{
+    const post=await Post.findById(postId).populate("author","_id userName profileImg");
+    if(!post) throw new ApiError(404,"Page not found");
+    const alreadyLiked=post.likes.some((id)=>id.toString()===userId.toString());
+    if(alreadyLiked){
+        post.likes=post.likes.filter((id)=>id.toString()!==userId.toString());
+    }else{
+        post.likes.push(userId);
+    }
+    await post.save();
+    return post;
+}
+
+export const commentPostService=async(postId,userId,text)=>{
+    const post=await Post.findById(postId).populate("author","_id userName profileImg");
+    if(!post) throw new ApiError(404,"Page not found");
+    post.comments.push({
+        message:text,
+        author:userId
+    });
+    await post.save();
+    await post.populate("comments.author","_id userName profileImg");
+    return post;
+}
+
+export const deletePostService=async(postId)=>{
+    return await Post.findByIdAndDelete(postId);
 }

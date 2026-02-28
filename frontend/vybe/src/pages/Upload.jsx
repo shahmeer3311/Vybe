@@ -4,6 +4,8 @@ import { MdOutlineKeyboardBackspace, MdClose } from "react-icons/md";
 import { Form, useNavigate } from "react-router-dom";
 import { createPostApi } from "../api/postApi";
 import { uploadToImageKit } from "../api/imagekitUpload";
+import { createStoryApi } from "../api/storyApi";
+import { createLoopApi } from "../api/loopApi";
 
 const Upload = () => {
   const navigate = useNavigate();
@@ -82,13 +84,43 @@ const Upload = () => {
     },
   });
 
+  const storyMutation = useMutation({
+    mutationFn: (payload) => createStoryApi(payload),
+    onSuccess: (data) => {
+      console.log("Story created successfully:", data);
+      resetForm();
+      navigate("/");
+    },
+    onError: (error) => {
+      console.error("Error creating story:", error);
+      setIsUploading(false);
+    },
+    onSettled: () => {
+      setIsUploading(false);
+    },
+  });
+
+  const loopMutation = useMutation({
+    mutationFn: (payload) => createLoopApi({ caption: payload.caption, media: payload.media.map(m => m.url) }),
+    onSuccess: (data) => {
+      console.log("Loop created successfully:", data);
+      resetForm();
+      navigate("/");
+    },
+    onError: (error) => {
+      console.error("Error creating loop:", error);
+      setIsUploading(false);
+    },
+    onSettled: () => {
+      setIsUploading(false);
+    },
+  });
+
  const handleBackendUpload = async () => {
   if (!caption && mediaFiles.length === 0) {
     alert("Please add caption or media.");
     return;
   }
-
-  if (selected !== "post") return;
 
   try {
     setIsUploading(true);
@@ -119,7 +151,9 @@ const Upload = () => {
       media: uploadedMedia,
     };
 
-    await postMutation.mutateAsync(payload);
+   if(selected==="post") await postMutation.mutateAsync(payload);
+   if(selected==="story") await storyMutation.mutateAsync(payload);
+   if(selected==="loop") await loopMutation.mutateAsync(payload); 
   } catch (error) {
     console.error("Error during upload flow:", error);
     setIsUploading(false);

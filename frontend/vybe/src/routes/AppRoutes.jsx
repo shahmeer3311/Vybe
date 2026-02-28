@@ -7,6 +7,9 @@ import Signup from '../pages/Signup'
 import Upload from '../pages/Upload';
 import Profile from '../pages/Profile';
 import EditProfile from '../pages/EditProfile';
+import Story from '../pages/Story';
+import MsgArea from '../pages/MsgArea';
+import LoopPage from '../pages/LoopPage';
 
 const AppRoutes = (user) => 
     createBrowserRouter([
@@ -26,8 +29,19 @@ const AppRoutes = (user) =>
                     element: <Profile />
                 },
                 {
-                    path: "edit-profile",
+                    path: "/edit-profile",
                     element: <EditProfile />
+                },
+                {
+                    path: "/story/:userName",
+                    element: <Story />
+                },{
+                    path: "/messageArea/:type/:id",
+                    element: <MsgArea />
+                },
+                {
+                    path: "/loop",
+                    element: <LoopPage />
                 }
             ]
         },

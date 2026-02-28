@@ -93,6 +93,6 @@ export const refreshToken=asyncHandler(async(req,res)=>{
     const newAccessToken=generateToken(user._id,"access");
     console.log("newAccessToken",newAccessToken);  
     return res.status(200).json(new ApiResponse(200,{accessToken: newAccessToken, 
-        user: {_id: user._id, name: user.name, email: user.email, userName: user.userName, profileImg: user.profileImg, bio: user.bio, profession: user.profession, gender: user.gender,}
+        user: {_id: user._id, name: user.name, email: user.email, userName: user.userName, profileImg: user.profileImg, bio: user.bio, profession: user.profession, gender: user.gender,stories: user.stories, loops: user.loops, followers: user.followers, following: user.following}
     }, "Access token refreshed successfully"));
 })

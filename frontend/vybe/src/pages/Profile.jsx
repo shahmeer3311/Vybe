@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getUserById } from '../api/userApi';
+import { getFollowingListApi, getUserById } from '../api/userApi';
 import { getAllPostsApi } from '../api/postApi';
 import { MdOutlineKeyboardBackspace } from "react-icons/md";
 import { useCurrentUser } from '../hooks/useAuth';
@@ -24,6 +24,14 @@ const Profile = () => {
         queryFn: getAllPostsApi,
     })
 
+    const { data: followingList } = useQuery({
+      queryKey: ["followingList"],
+      queryFn: async () => {
+        const response = await getFollowingListApi();
+        return response.data;
+      },
+    });
+
     if(profileLoading || postsLoading) return <div className='text-white'>Loading...</div>  
     console.log(profileUser.data);
     console.log(posts);
@@ -32,7 +40,8 @@ const Profile = () => {
     const allPosts=posts?.data || [];
     const myPost=allPosts.filter(p=>p.author._id===profileData._id);
     const isOwner=currentUser?.userName===profileData.userName;
-    const isFollowing = currentUser?.following?.includes(profileData._id) || false;
+    const isFollowing =
+      followingList?.following?.some((u) => u._id === profileData._id) || false;
 
     console.log(myPost);
   return (
