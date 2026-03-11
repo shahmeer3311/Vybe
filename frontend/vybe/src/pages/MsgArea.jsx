@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getUserById } from "../api/userApi";
@@ -12,7 +12,13 @@ import {
 import { uploadToImageKit } from "../api/imagekitUpload";
 import { MdOutlineKeyboardBackspace } from "react-icons/md";
 import { MdAddPhotoAlternate } from "react-icons/md";
+import { TiArrowForward } from "react-icons/ti";
+import { socket } from "../api/axiosInstance";
 import { IoSend } from "react-icons/io5";
+import SelectUser from "../components/SelectUser";
+import GroupAvatar from "../components/GroupAvatar";
+import { toast } from "react-hot-toast";
+import { BsCheck, BsCheck2All } from "react-icons/bs";
 
 const defaultAvatar = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
 
@@ -24,21 +30,24 @@ const MsgArea = () => {
   const [input, setInput] = useState("");
   const [frontImg, setFrontImg] = useState(null);
   const fileInputRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const [showForward, setShowForward] = useState(false);
+  const [forwardMsg, setForwardMsg] = useState(null);
+  const [selectedConvId, setSelectedConvId] = useState(null);
 
   const { data: currentUser } = useCurrentUser();
 
   const userId = type === "user" ? id : null;
   const groupId = type === "group" ? id : null;
 
-  const { data: selectedEntity, isLoading } = useQuery({
+  const { data: selectedEntity } = useQuery({
     queryKey: ["selectedEntity", type, id],
     queryFn: async () =>
       type === "user" ? getUserById(userId) : getGroupById(groupId),
     enabled: !!id && !!type,
   });
 
-  const entityData = selectedEntity?.data || {};
+  const entityData =
+    type === "user" ? selectedEntity?.data || {} : selectedEntity || {};
 
   const handleImageUpload = () => fileInputRef.current.click();
 
@@ -54,7 +63,7 @@ const MsgArea = () => {
     }
   };
 
-  const { data: conversationData, isLoading: conversationLoading } = useQuery({
+  const { data: conversationData } = useQuery({
     queryKey: ["conversation", type, id],
     queryFn: async () =>
       type === "user"
@@ -63,7 +72,7 @@ const MsgArea = () => {
     enabled: !!id && !!type,
   });
 
-  const { data: messages = [], isLoading: messagesLoading } = useQuery({
+  const { data: messages = [] } = useQuery({
     queryKey: ["messages", conversationData?._id],
     queryFn: async () => getMessagesApi(conversationData?._id),
     enabled: !!conversationData?._id,
@@ -115,10 +124,16 @@ const MsgArea = () => {
       const optimisticMessage = {
         _id: `temp-${Date.now()}`,
         conversationId: conversationData._id,
-        sender: { _id: currentUser._id }, 
+        sender: { _id: currentUser._id },
         message: newMessage.message,
-        media: newMessage.mediaFile ? URL.createObjectURL(newMessage.mediaFile): undefined,
-        mediaType:  newMessage.mediaFile ? (newMessage.mediaFile.type.startsWith("image/") ? "image" : "video") : undefined,
+        media: newMessage.mediaFile
+          ? URL.createObjectURL(newMessage.mediaFile)
+          : undefined,
+        mediaType: newMessage.mediaFile
+          ? newMessage.mediaFile.type.startsWith("image/")
+            ? "image"
+            : "video"
+          : undefined,
         status: "sent",
         createdAt: new Date().toISOString(),
       };
@@ -144,9 +159,12 @@ const MsgArea = () => {
       queryClient.setQueryData(
         ["messages", conversationData?._id],
         (oldMessages = []) => {
-          return oldMessages.map((msg) =>
-            msg._id === context?.optimisticMessage?._id ? data : msg,
-          );
+          const realId = data?._id;
+          const optimisticId = context?.optimisticMessage?._id;
+          // Remove any existing entry with the real DB _id (possibly added via socket)
+          const cleaned = oldMessages.filter((msg) => msg._id !== realId);
+          // Replace optimistic message (temp-*) with the real one
+          return cleaned.map((msg) => (msg._id === optimisticId ? data : msg));
         },
       );
 
@@ -155,8 +173,116 @@ const MsgArea = () => {
     },
   });
 
-   const formatTime = (date) =>
-    new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const formatTime = (date) =>
+    new Date(date).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  useEffect(() => {
+    if (!conversationData?._id || !currentUser?._id) return;
+    if (!socket.connected) {
+      socket.connect();
+      socket.emit("registerUser", {
+        _id: currentUser._id,
+        userName: currentUser.userName,
+        name: currentUser.name,
+      });
+    }
+
+    socket.emit("joinConversation", conversationData._id);
+
+    const handleUserJoined = ({ userId, userName, conversationId }) => {
+      if (conversationId !== conversationData._id || userId === currentUser._id)
+        return;
+      const label = userName || `User ${userId}`;
+      toast.success(`${label} joined the chat`);
+    };
+
+    const handleUserLeft = ({ userId, userName, conversationId }) => {
+      if (conversationId !== conversationData._id || userId === currentUser._id)
+        return;
+      const label = userName || `User ${userId}`;
+      toast(`${label} left the chat`, { icon: "👋" });
+    };
+
+    socket.on("userJoined", handleUserJoined);
+    socket.on("userLeft", handleUserLeft);
+
+    const handler = (msg) => {
+      if (msg.conversationId !== conversationData._id) return;
+
+      // Append the new message if it's not already in cache
+      queryClient.setQueryData(
+        ["messages", conversationData._id],
+        (oldMessages = []) => {
+          const exists = oldMessages.some((m) => m._id === msg._id);
+          if (exists) return oldMessages;
+          return [...oldMessages, msg];
+        },
+      );
+
+      // If this client is the receiver and the chat is currently open,
+      // treat the message as SEEN immediately (WhatsApp-style blue double tick).
+      if (msg.sender._id !== currentUser._id) {
+        toast(`${msg.sender.name}: ${msg.message || "Sent a media message"}`);
+
+        socket.emit("messagesSeen", {
+          conversationId: msg.conversationId,
+          userId: currentUser._id,
+        });
+      }
+    };
+
+    socket.on("messageStatusUpdated", ({ messageId, status }) => {
+      queryClient.setQueryData(
+        ["messages", conversationData._id],
+        (oldMessages = []) =>
+          oldMessages.map((msg) =>
+            msg._id === messageId ? { ...msg, status } : msg,
+          ),
+      );
+    });
+
+    socket.emit("messagesSeen", {
+      conversationId: conversationData._id,
+      userId: currentUser._id,
+    });
+
+    socket.on("messagesSeenUpdate", ({ conversationId }) => {
+      queryClient.setQueryData(
+        ["messages", conversationId],
+        (oldMessages = []) =>
+          oldMessages.map((msg) =>
+            msg.status !== "seen" ? { ...msg, status: "seen" } : msg,
+          ),
+      );
+    });
+
+    // Listen for new messages (including forwarded ones) from the server
+    socket.on("newMessage", handler);
+
+    return () => {
+      socket.off("newMessage", handler);
+      socket.off("userJoined", handleUserJoined);
+      socket.off("userLeft", handleUserLeft);
+      socket.emit("leaveConversation", conversationData._id);
+    };
+  }, [conversationData?._id, currentUser?._id, queryClient]);
+
+  const getMessageTick = (msg, isOwnMessage) => {
+    if (!isOwnMessage) return null;
+
+    if (msg.status === "seen") {
+      return <BsCheck2All className="text-blue-600 w-4 h-4" />;
+    }
+
+    if (msg.status === "delivered") {
+      return <BsCheck2All className="text-gray-600 w-4 h-4" />;
+    }
+
+    return <BsCheck className="text-gray-400 w-4 h-4" />;
+  };
 
   return (
     <div className="-full min-h-screen bg-black flex flex-col text-white">
@@ -166,13 +292,22 @@ const MsgArea = () => {
           className="w-7 h-7 absolute left-4 cursor-pointer"
         />
         <div className="flex gap-3 items-center">
-          <img
-            src={
-              entityData?.profileImg || entityData?.groupImage || defaultAvatar
-            }
-            alt="Profile"
-            className="w-10 h-10 rounded-full object-cover border border-gray-700"
-          />
+          {type === "group" ? (
+            <GroupAvatar
+              participants={conversationData?.participants || []}
+              currentUserId={currentUser?._id}
+            />
+          ) : (
+            <img
+              src={
+                entityData?.profileImg ||
+                entityData?.groupImage ||
+                defaultAvatar
+              }
+              alt="Profile"
+              className="w-10 h-10 rounded-full object-cover border border-gray-700"
+            />
+          )}
           <div>
             <h3 className="text-sm font-bold">
               {type === "user"
@@ -207,12 +342,16 @@ const MsgArea = () => {
               <div
                 className={`max-w-[60%] px-4 py-2 rounded-xl flex flex-col gap-1 relative group-hover:bg-gray-700 ${
                   isOwnMessage
-                    ? "bg-blue-600 rounded-br-none"
+                    ? "bg-green-600 rounded-br-none"
                     : "bg-gray-800 rounded-bl-none"
                 }`}
               >
                 {type === "group" && !isOwnMessage && (
                   <p className="text-xs text-gray-400">{msg.sender.name}</p>
+                )}
+
+                {msg.isForwarded && (
+                  <p className="text-xs text-gray-400 italic">Forwarded</p>
                 )}
 
                 <div
@@ -221,7 +360,7 @@ const MsgArea = () => {
                   <p className="text-sm">{msg.message}</p>
                 </div>
 
-                {msg.media && (
+                {msg.media && msg.mediaType === "image" && (
                   <img
                     src={msg.media}
                     className="w-40 h-40 rounded-lg"
@@ -238,18 +377,25 @@ const MsgArea = () => {
 
                 <div className="flex justify-end items-center gap-1 text-xs mt-1 text-gray-300">
                   <span>{formatTime(msg.createdAt)}</span>
-                  {/* {isOwnMessage && getMessageArrow(msg)} */}
+                  {isOwnMessage && getMessageTick(msg, isOwnMessage)}
                 </div>
 
-                {/* <div
+                <div
                   onClick={() => {
                     setForwardMsg(msg);
                     setShowForward(true);
                   }}
-                  className={`absolute top-1 ${isOwnMessage ? "-left-6" : "-right-6"} hidden group-hover:flex bg-black p-1 rounded-full cursor-pointer`}
+                  className={`
+                absolute top-5 ${isOwnMessage ? "right-40" : "left-40"}
+                hidden group-hover:flex bg-black p-1 rounded-full cursor-pointer
+              `}
                 >
-                  <IoSend className="text-green-400 rotate-45 w-4 h-4" />
-                </div> */}
+                  {isOwnMessage ? (
+                    <TiArrowForward className="w-5 h-5 text-gray-300" />
+                  ) : (
+                    <TiArrowForward className="w-5 h-5 text-gray-300 rotate-180" />
+                  )}
+                </div>
               </div>
 
               {/* Sender avatar */}
@@ -263,7 +409,6 @@ const MsgArea = () => {
             </div>
           );
         })}
-        <div ref={messagesEndRef} />
       </div>
 
       <div className="fixed bottom-0 w-full bg-black border-t border-gray-800 py-3">
@@ -305,6 +450,16 @@ const MsgArea = () => {
           )}
         </form>
       </div>
+
+      {showForward && (
+        <SelectUser
+          setForwardMsg={setForwardMsg}
+          forwardMsg={forwardMsg}
+          setShowForward={setShowForward}
+          setSelectedConvId={setSelectedConvId}
+          selectedConvId={selectedConvId}
+        />
+      )}
     </div>
   );
 };

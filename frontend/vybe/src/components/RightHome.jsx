@@ -5,10 +5,13 @@ import { FiMessageCircle, FiSearch } from "react-icons/fi";
 import { getFollowingListApi } from "../api/userApi";
 import { getUserConversationsApi } from "../api/msgApi";
 import { useNavigate } from "react-router-dom";
+import GroupAvatar from "./GroupAvatar";
+import { useMessageNotifications } from "../hooks/useMessageNotifications";
 
 const RightHome = ({ user }) => {
   const navigate=useNavigate();
   const { onlineUserIds, lastSeenMap } = useOnlineUsers();
+  const { unreadCounts, clearConversationUnread } = useMessageNotifications();
 
   // Subscribe to the same following list query so this component
   // updates as soon as the data is fetched or changes.
@@ -135,7 +138,7 @@ const RightHome = ({ user }) => {
           {offlineUsers.length === 0 ? (
             <p className="text-xs text-gray-500">No recent contacts yet.</p>
           ) : (
-            <div className="flex flex-col gap-3 border-b border-gray-800 pt-3">
+            <div className="flex flex-col gap-3 border-b border-gray-800 pt-3 h-30 overflow-y-auto">
               {offlineUsers.map((u) => (
                 <div
                   key={u._id}
@@ -167,7 +170,7 @@ const RightHome = ({ user }) => {
         </div>     
       </div>
 
-       <div className="px-5 py-3  bg-gradient-to-b from-black to-gray-950 absolute top-65 w-full">
+       <div className="px-5 py-3  bg-gradient-to-b from-black to-gray-950 absolute top-75 w-full">
         <div className="relative">
           <FiSearch className="absolute left-3 top-2.5 text-gray-400" size={18} />
           <input
@@ -180,35 +183,78 @@ const RightHome = ({ user }) => {
            <h1 className="text-white text-2xl italic font-bold">Message History</h1>
            {messageHistory && messageHistory.length > 0 ? (
              <ul className="mt-3 space-y-2">
-               {messageHistory.map((conv) => (
-                 <li 
-                 onClick={()=>navigate(`/messageArea/user/${conv.participants[1]._id}`)}
-                 key={conv._id} className="flex items-center gap-3 bg-gray-900/60 rounded-lg px-4 py-4 cursor-pointer hover:bg-gray-900 transition-colors">
-                   <img
-                     src={
-                       conv.participants[1].profileImg ||
-                       "https://cdn-icons-png.flaticon.com/512/149/149071.png"
-                     }
-                     alt={conv.participants[1].userName}
-                     className="w-10 h-10 rounded-full object-cover"
-                   />
-                   <div className="flex items-center justify-between w-full">
-                     <div>
-                      <p className="text-sm font-medium text-white">
-                       {conv.participants[1].name}
-                     </p>
-                     <p className="text-xs text-gray-400 truncate max-w-[150px]">
-                       {conv.lastMessage?.message || "No messages yet"}
-                     </p>
+               {messageHistory.map((conv) => {
+                 const participants = Array.isArray(conv.participants)
+                   ? conv.participants
+                   : [];
+
+                 const otherParticipant = participants.find(
+                   (p) => String(p._id) !== String(user?._id),
+                 ) || participants[0];
+
+                 if (!otherParticipant) return null;
+
+                 const unread = unreadCounts?.[conv._id] || 0;
+
+                 return (
+                   <li
+                     key={conv._id}
+                     onClick={() => {
+                       clearConversationUnread(conv._id);
+                       navigate(`/messageArea/user/${otherParticipant._id}`);
+                     }}
+                     className="flex items-center gap-3 bg-gray-900/60 rounded-lg px-4 py-4 cursor-pointer hover:bg-gray-900 transition-colors"
+                   >
+                    {
+                      conv.isGroupChat ? 
+                      (
+                        <GroupAvatar
+                         participants={participants}
+                         currentUserId={user?._id}
+                       />
+                      )
+                      :
+                      (
+                        <img
+                         src={
+                           otherParticipant.profileImg ||
+                           "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+                         }
+                         alt={otherParticipant.userName}
+                         className="w-10 h-10 rounded-full object-cover"
+                       />
+                      )
+                    }
+                     <div className="flex items-center justify-between w-full pl-3">
+                       <div>
+                         <p className="text-sm font-medium text-white">
+                           {otherParticipant.name}
+                         </p>
+                         <p className="text-xs text-gray-400 truncate max-w-[150px]">
+                           {conv.lastMessage?.message || "No messages yet"}
+                         </p>
+                       </div>
+                       <div className="flex flex-col items-end gap-1">
+                         <p className="text-[10px] text-gray-500">
+                           {conv.createdAt
+                             ? new Date(conv.createdAt).toLocaleTimeString(
+                                 [],
+                                 { hour: "2-digit", minute: "2-digit" },
+                               )
+                             : "No messages yet"}
+                         </p>
+                         {unread > 0 && (
+                           <span className="min-w-[16px] h-[16px] px-1.5 rounded-full bg-red-600 text-[10px] flex items-center justify-center text-white">
+                             {unread > 9 ? "9+" : unread}
+                           </span>
+                         )}
+                       </div>
                      </div>
-                     <p className="text-[10px] text-gray-500">
-                       {conv.createdAt ? new Date(conv.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "No messages yet"}
-                     </p>
-                   </div>   
-                  </li>
-                ))}
-              </ul>
-            ) : (
+                   </li>
+                 );
+               })}
+             </ul>
+           ) : (
               <p className="text-xs text-gray-500 mt-2">No conversations found.</p>
             )}
         </div>

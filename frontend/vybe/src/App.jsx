@@ -17,7 +17,11 @@ const App = () => {
   useEffect(()=>{
     if(!user?._id) return;
     socket.connect();
-    socket.emit("registerUser",user._id);
+    socket.emit("registerUser",{
+        _id: user._id,
+        name: user.name,
+        userName: user.userName,
+    });
     return ()=>{
         socket.disconnect();
     }

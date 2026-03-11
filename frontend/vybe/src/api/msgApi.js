@@ -25,3 +25,13 @@ export const getUserConversationsApi = async () => {
   const { data } = await api.get(`/conversations/user`);
   return data.data.conversations;
 };
+
+export const forwardMessageApi = async ({ messageId, conversationId }) => {
+  const { data } = await api.post(`/messages/forward`, { messageId, conversationId });
+  return data.data;
+};
+
+export const createGroupConversationApi = async ({ groupName, participantIds }) => {
+  const { data } = await api.post(`/conversations/group`, { groupName, participantIds });
+  return data.data;
+}

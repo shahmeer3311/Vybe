@@ -1,4 +1,5 @@
 import Message from "../models/message.model.js";
+import Conversation from "../models/conversation.model.js";
 
 export const createAndEmitMessage = async ({
     conversation,
@@ -40,3 +41,28 @@ export const getMessagesService = async (conversationId) => {
         throw error;
     }
 };
+
+export const forwardMessageService =async({senderId,messageId,conversationId})=>{
+    try {
+        const originalMessage=await Message.findById(messageId);
+        if(!originalMessage){
+            throw new Error("Original message not found");
+        }
+        const newMessage=await Message.create({
+            sender: senderId,
+            conversationId,
+            message: originalMessage.message,
+            media: originalMessage.media,
+            mediaType: originalMessage.mediaType,
+            isForwarded: true,
+            status: "sent",
+        });
+
+        await Conversation.findByIdAndUpdate(conversationId,{
+            lastMessage: newMessage._id,
+        });
+        return newMessage;
+    } catch (error) {
+        throw error;
+    }
+}

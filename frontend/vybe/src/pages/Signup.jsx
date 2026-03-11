@@ -37,6 +37,7 @@ const Signup = () => {
 
   const handleBlur=(field,value)=>{
     if(value.trim()===""){
+      // [field] → dynamic object key
       setActiveField({...activeField,[field]: false})
     }
   }

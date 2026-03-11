@@ -46,7 +46,9 @@ export const findOrCreateConversation = async ({
 
 export const getGroupByIdService = async (groupId) => {
   try {
-    const group = await Conversation.findById(groupId);
+    const group = await Conversation.findById(groupId)
+      .populate("participants", "name profileImg email")
+      .populate("groupAdmin", "name profileImg email");
     return group;
   } catch (error) {
     throw error;
@@ -92,3 +94,17 @@ export const getUserConversationsService=async(userId)=>{
   throw error;
  }
 };
+
+export const createGroupConversationService=async(adminId, groupName, participantIds)=>{
+  try {
+    const conversation = await Conversation.create({
+      participants: participantIds,
+      isGroupChat: true,
+      groupName: groupName,
+      groupAdmin: adminId,
+    });
+    return conversation;
+  } catch (error) {
+    throw error;
+  }
+}

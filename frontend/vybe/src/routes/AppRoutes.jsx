@@ -10,6 +10,7 @@ import EditProfile from '../pages/EditProfile';
 import Story from '../pages/Story';
 import MsgArea from '../pages/MsgArea';
 import LoopPage from '../pages/LoopPage';
+import Chats from '../pages/Chats';
 
 const AppRoutes = (user) => 
     createBrowserRouter([
@@ -42,6 +43,10 @@ const AppRoutes = (user) =>
                 {
                     path: "/loop",
                     element: <LoopPage />
+                },
+                {
+                    path: "/chats",
+                    element: <Chats />
                 }
             ]
         },
